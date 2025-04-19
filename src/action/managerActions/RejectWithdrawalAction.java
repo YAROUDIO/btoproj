@@ -31,28 +31,31 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class ViewAllEnquiriesManagerAction implements IAction {
+public class RejectWithdrawalAction implements IAction {
+
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        EnquiryService enqService = (EnquiryService) services.get("enq");
+        ApplicationService appService = (ApplicationService) services.get("app");
+        BaseView baseView = (BaseView) views.get("base");
+        ManagerView managerView = (ManagerView) views.get("manager");
         IUserRepository userRepo = (IUserRepository) services.get("user");
         ProjectService projectService = (ProjectService) services.get("project");
-        EnquiryView enqView = (EnquiryView) views.get("enq");
-        BaseView baseView = (BaseView) views.get("base");
 
-        List<Enquiry> allEnquiries = enqService.getAllEnquiries();
-        if (allEnquiries.isEmpty()) {
-            baseView.displayMessage("There are no enquiries in the system.");
-            return null;
+        Application appToAction = ManagerActionUtils.selectWithdrawalRequest((HDBManager) currentUser, services, views, "reject withdrawal for");
+        if (appToAction == null) return null;
+
+        User applicant = userRepo.findUserByNric(appToAction.getApplicantNric());
+        Project project = projectService.findProjectByName(appToAction.getProjectName());
+        if (applicant == null || project == null) {
+            throw new IntegrityError("Applicant or Project not found.");
         }
 
-        baseView.displayMessage("All System Enquiries:", true);
-        for (Enquiry enquiry : allEnquiries) {
-            User applicant = userRepo.findUserByNric(enquiry.getApplicantNric()).orElse(null);
-            String applicantName = (applicant != null) ? applicant.getName() : "Unknown";
-            Project project = projectService.findProjectByName(enquiry.getProjectName()).orElse(null);
-            String projectName = (project != null) ? project.getProjectName() : "Unknown/Deleted";
-            enqView.displayEnquiryDetails(enquiry, projectName, applicantName);
+        managerView.displayWithdrawalRequestForApproval(appToAction, applicant, project);
+        if (InputUtil.getYesNoInput("Reject withdrawal for " + applicant.getName() + " (Project: " + project.getProjectName() + ")?")) {
+            appService.managerRejectWithdrawal((HDBManager) currentUser, appToAction);
+            baseView.displayMessage("Withdrawal request for " + applicant.getName() + " rejected.", true);
+        } else {
+            baseView.displayMessage("Rejection cancelled.", true);
         }
         return null;
     }

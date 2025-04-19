@@ -31,29 +31,33 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class ViewAllEnquiriesManagerAction implements IAction {
+public class RejectOfficerRegistrationAction implements IAction {
+
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        EnquiryService enqService = (EnquiryService) services.get("enq");
+        RegistrationService regService = (RegistrationService) services.get("reg");
+        BaseView baseView = (BaseView) views.get("base");
+        ManagerView managerView = (ManagerView) views.get("manager");
         IUserRepository userRepo = (IUserRepository) services.get("user");
         ProjectService projectService = (ProjectService) services.get("project");
-        EnquiryView enqView = (EnquiryView) views.get("enq");
-        BaseView baseView = (BaseView) views.get("base");
 
-        List<Enquiry> allEnquiries = enqService.getAllEnquiries();
-        if (allEnquiries.isEmpty()) {
-            baseView.displayMessage("There are no enquiries in the system.");
-            return null;
+        Registration regToReject = ManagerActionUtils.selectPendingRegistration((HDBManager) currentUser, services, views, "reject");
+        if (regToReject == null) return null;
+
+        User officer = userRepo.findUserByNric(regToReject.getOfficerNric());
+        Project project = projectService.findProjectByName(regToReject.getProjectName());
+        if (officer == null || project == null) {
+            throw new IntegrityError("Officer or Project not found.");
         }
 
-        baseView.displayMessage("All System Enquiries:", true);
-        for (Enquiry enquiry : allEnquiries) {
-            User applicant = userRepo.findUserByNric(enquiry.getApplicantNric()).orElse(null);
-            String applicantName = (applicant != null) ? applicant.getName() : "Unknown";
-            Project project = projectService.findProjectByName(enquiry.getProjectName()).orElse(null);
-            String projectName = (project != null) ? project.getProjectName() : "Unknown/Deleted";
-            enqView.displayEnquiryDetails(enquiry, projectName, applicantName);
+        managerView.displayOfficerRegistrationForApproval(regToReject, officer, project);
+        if (InputUtil.getYesNoInput("Reject " + officer.getName() + " for '" + project.getProjectName() + "'?")) {
+            regService.managerRejectOfficerRegistration((HDBManager) currentUser, regToReject);
+            baseView.displayMessage("Registration for " + officer.getName() + " rejected.", true);
+        } else {
+            baseView.displayMessage("Rejection cancelled.", true);
         }
         return null;
     }
 }
+

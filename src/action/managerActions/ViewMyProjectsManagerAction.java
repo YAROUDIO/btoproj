@@ -5,13 +5,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
+import interfaces.IAction;
 import service.ApplicationService;
 import service.ProjectService;
 import service.RegistrationService;
 import service.EnquiryService;
 import service.ReportService;
-import interfaces.IAction;
 import interfaces.IUserRepository;
 import view.ProjectView;
 import view.ApplicationView;
@@ -32,17 +31,25 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class GenerateBookingReportAction implements IAction {
+public class ViewMyProjectsManagerAction implements IAction {
+
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        ReportService reportService = (ReportService) services.get("report");
-        ReportView reportView = (ReportView) views.get("report");
+        ProjectService projectService = (ProjectService) services.get("project");
+        ProjectView projectView = (ProjectView) views.get("project");
+        BaseView baseView = (BaseView) views.get("base");
 
-        Map<String, String> filters = reportView.promptReportFilters();
-        List<Map<String, String>> reportData = reportService.generateBookingReportData(filters);
-        List<String> headers = Arrays.asList("NRIC", "Applicant Name", "Age", "Marital Status", "Flat Type", "Project Name", "Neighborhood");
+        List<Project> myProjects = projectService.getProjectsByManager(((HDBManager) currentUser).getNric());
+        if (myProjects.isEmpty()) {
+            baseView.displayMessage("You are not managing any projects.", true);
+            return null;
+        }
 
-        reportView.displayReport("Booking Report", reportData, headers);
+        baseView.displayMessage("Projects You Manage:", true);
+        for (Project project : myProjects) {
+            projectView.displayProjectDetails(project, UserRole.HDB_MANAGER);
+        }
+
         return null;
     }
 }

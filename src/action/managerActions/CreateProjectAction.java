@@ -32,18 +32,26 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class GenerateBookingReportAction implements IAction {
+public class CreateProjectAction implements IAction {
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        ReportService reportService = (ReportService) services.get("report");
-        ReportView reportView = (ReportView) views.get("report");
+        ProjectService projectService = (ProjectService) services.get("project");
+        ProjectView projectView = (ProjectView) views.get("project");
+        BaseView baseView = (BaseView) views.get("base");
 
-        Map<String, String> filters = reportView.promptReportFilters();
-        List<Map<String, String>> reportData = reportService.generateBookingReportData(filters);
-        List<String> headers = Arrays.asList("NRIC", "Applicant Name", "Age", "Marital Status", "Flat Type", "Project Name", "Neighborhood");
+        Map<String, String> details = projectView.promptCreateProjectDetails();
+        if (details == null) {
+            return null;
+        }
 
-        reportView.displayReport("Booking Report", reportData, headers);
+        Project newProject = projectService.createProject(
+            currentUser, details.get("name"), details.get("neighborhood"),
+            Integer.parseInt(details.get("n1")), Integer.parseInt(details.get("p1")),
+            Integer.parseInt(details.get("n2")), Integer.parseInt(details.get("p2")),
+            Integer.parseInt(details.get("od")), Integer.parseInt(details.get("cd")),
+            Integer.parseInt(details.get("slot"))
+        );
+        baseView.displayMessage("Project '" + newProject.getProjectName() + "' created.", true, false, false);
         return null;
     }
 }
-

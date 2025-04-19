@@ -32,17 +32,26 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class GenerateBookingReportAction implements IAction {
+public class EditProjectAction implements IAction {
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        ReportService reportService = (ReportService) services.get("report");
-        ReportView reportView = (ReportView) views.get("report");
+        ProjectService projectService = (ProjectService) services.get("project");
+        ProjectView projectView = (ProjectView) views.get("project");
+        BaseView baseView = (BaseView) views.get("base");
 
-        Map<String, String> filters = reportView.promptReportFilters();
-        List<Map<String, String>> reportData = reportService.generateBookingReportData(filters);
-        List<String> headers = Arrays.asList("NRIC", "Applicant Name", "Age", "Marital Status", "Flat Type", "Project Name", "Neighborhood");
+        Project projectToEdit = ManagerActionUtils.selectManagedProject((HDBManager) currentUser, services, views, "edit");
+        if (projectToEdit == null) {
+            return null;
+        }
 
-        reportView.displayReport("Booking Report", reportData, headers);
+        Map<String, String> updates = projectView.promptEditProjectDetails(projectToEdit);
+        if (updates == null || updates.isEmpty()) {
+            baseView.displayMessage("No changes entered.", false, true, false);
+            return null;
+        }
+
+        projectService.editProject(currentUser, projectToEdit, updates);
+        baseView.displayMessage("Project '" + projectToEdit.getProjectName() + "' updated.", false, true, false);
         return null;
     }
 }

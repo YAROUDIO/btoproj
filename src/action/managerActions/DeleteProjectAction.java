@@ -32,18 +32,23 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
-public class GenerateBookingReportAction implements IAction {
+public class DeleteProjectAction implements IAction {
+
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
-        ReportService reportService = (ReportService) services.get("report");
-        ReportView reportView = (ReportView) views.get("report");
+        ProjectService projectService = (ProjectService) services.get("project");
+        BaseView baseView = (BaseView) views.get("base");
 
-        Map<String, String> filters = reportView.promptReportFilters();
-        List<Map<String, String>> reportData = reportService.generateBookingReportData(filters);
-        List<String> headers = Arrays.asList("NRIC", "Applicant Name", "Age", "Marital Status", "Flat Type", "Project Name", "Neighborhood");
+        Project projectToDelete = ManagerActionUtils.selectManagedProject((HDBManager) currentUser, services, views, "delete");
+        if (projectToDelete == null) return null;
 
-        reportView.displayReport("Booking Report", reportData, headers);
+        String warning = "Delete project '" + projectToDelete.getProjectName() + "'? This cannot be undone. Proceed?";
+        if (InputUtil.getYesNoInput(warning)) {
+            projectService.deleteProject((HDBManager) currentUser, projectToDelete);
+            baseView.displayMessage("Project '" + projectToDelete.getProjectName() + "' deleted.", true, false, false);
+        } else {
+            baseView.displayMessage("Deletion cancelled.", true, false, false);
+        }
         return null;
     }
 }
-
