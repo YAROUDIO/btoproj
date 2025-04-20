@@ -38,11 +38,11 @@ public class ViewHandledProjectsOfficerAction implements IAction {
                 .collect(Collectors.toList());
 
         if (handledProjects.isEmpty()) {
-            baseView.displayMessage("You are not currently assigned to handle any projects.");
+            baseView.displayMessage("You are not currently assigned to handle any projects.", false, true, false);
             return null;
         }
 
-        baseView.displayMessage("Projects You Handle (Assigned):", true);
+        baseView.displayMessage("Projects You Handle (Assigned):", false, true, false);
         handledProjects.sort(Comparator.comparing(Project::getProjectName)); // Sorting by project name
         for (Project project : handledProjects) {
             projectView.displayProjectDetails(project, UserRole.HDB_OFFICER, ((HDBOfficer) currentUser).getMaritalStatus());

@@ -1,4 +1,5 @@
 package action.applicantactions;
+
 import common.ApplicationStatus;
 import exception.OperationError;
 import interfaces.IAction;
@@ -13,7 +14,6 @@ import view.BaseView;
 import view.EnquiryView;
 import view.ProjectView;
 import util.InputUtil;
-
 import java.util.List;
 import java.util.Map;
 class ViewMyEnquiriesAction implements IAction {

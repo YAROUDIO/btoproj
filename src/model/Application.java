@@ -51,6 +51,11 @@ public class Application implements Displayable{
     public FlatType getFlatType() { return flatType; }
     public ApplicationStatus getStatus() { return status; }
     public boolean isRequestWithdrawal() { return requestWithdrawal; }
+ // In the Application class
+    public boolean isForProject(Project project) {
+        return this.projectName.equals(project.getProjectName());
+    }
+
 
     // Setters for status and withdrawal request
     public void setStatus(ApplicationStatus newStatus) {

@@ -1,14 +1,15 @@
 package service;
 
-package service;
+
+import java.util.Optional;
 
 import common.UserRole;
 import exception.OperationError;
 import exception.DataSaveError;
 import model.User;
-import repository.interfaces.IUserRepository;
+import interfaces.IUserRepository;
 import service.interfaces.IAuthService;
-import utils.InputUtil;
+import util.InputUtil;
 
 public class AuthService implements IAuthService {
     private IUserRepository userRepo;
@@ -25,7 +26,9 @@ public class AuthService implements IAuthService {
             throw new OperationError("Invalid NRIC format.");
         }
 
-        User user = userRepo.findUserByNric(nric);
+        Optional<User> optionalUser = userRepo.findUserByNric(nric);
+        User user = optionalUser.get();  // This will throw an exception if no value is present
+
 
         if (user != null && user.checkPassword(password)) {
             return user;
@@ -44,7 +47,7 @@ public class AuthService implements IAuthService {
             user.changePassword(newPassword);
 
             // Persist the change using the repository
-            userRepo.saveUser(user);
+            userRepo.saveUser(user);  // Use the instance to call saveUser()
 
         } catch (IllegalArgumentException | OperationError e) {
             // Catch validation errors or operation-related exceptions
@@ -59,6 +62,7 @@ public class AuthService implements IAuthService {
             throw new OperationError("An unexpected error occurred during password change.");
         }
     }
+
 
     // Get user role method
     @Override

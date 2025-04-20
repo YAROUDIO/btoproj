@@ -1,22 +1,16 @@
 package action.applicantactions;
 
 
-import common.ApplicationStatus;
 import common.UserRole;
 import interfaces.IAction;
 import model.Applicant;
 import model.Application;
-import model.Enquiry;
 import model.Project;
 import model.User;
-import interfaces.IUserRepository;
 import service.ApplicationService;
-import service.EnquiryService;
 import service.ProjectService;
 import util.InputUtil;
-import view.ApplicationView;
 import view.BaseView;
-import view.EnquiryView;
 import view.ProjectView;
 
 import java.util.*;

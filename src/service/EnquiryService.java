@@ -1,21 +1,24 @@
 package service;
 
-package service;
 
 import common.UserRole;
 import exception.OperationError;
+import exception.DataLoadError;
+import exception.DataSaveError;
 import exception.IntegrityError;
 import model.Applicant;
+import model.Application;
 import model.Enquiry;
 import model.Project;
 import model.User;
-import repository.interfaces.IEnquiryRepository;
-import repository.interfaces.IApplicationRepository;
-import repository.interfaces.IUserRepository;
+import interfaces.IEnquiryRepository;
+import interfaces.IApplicationRepository;
+import interfaces.IUserRepository;
 import service.interfaces.IEnquiryService;
 import service.interfaces.IProjectService;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class EnquiryService implements IEnquiryService {
@@ -35,8 +38,10 @@ public class EnquiryService implements IEnquiryService {
 
     @Override
     public Enquiry findEnquiryById(int enquiryId) {
-        return _enqRepo.findById(enquiryId);
+        Optional<Enquiry> optionalEnquiry = _enqRepo.findById(enquiryId);
+        return optionalEnquiry.orElse(null);  // Return the Enquiry if present, otherwise return null
     }
+
 
     @Override
     public List<Enquiry> getEnquiriesByApplicant(String applicantNric) {
@@ -66,37 +71,67 @@ public class EnquiryService implements IEnquiryService {
         }
 
         // Check if applicant can view the project
-        var currentApp = _appRepo.findByApplicantNric(applicant.getNric());
-        var viewableProjects = _projectService.getViewableProjectsForApplicant(applicant, currentApp);
-        if (!viewableProjects.contains(project)) {
-            boolean isApplied = currentApp != null && currentApp.getProjectName().equals(project.getProjectName());
+        var currentApp = _appRepo.findByApplicantNric(applicant.getNric());  // This is Optional<Application>
+        var viewableProjects = _projectService.getViewableProjectsForApplicant(applicant, currentApp);  // Pass Optional<Application> directly
+
+        // Check if the project is in viewable projects
+        if (currentApp.isPresent()) {
+            Application application = currentApp.get();  // Unwrap the Optional<Application>
+            boolean isApplied = application.isForProject(project);  // Now call isForProject() on Application
             if (!isApplied) {
                 throw new OperationError("You cannot submit an enquiry for a project you cannot view.");
             }
+        } else {
+            throw new OperationError("You have no application for this project.");
         }
 
         try {
-            // Create enquiry with temporary ID 0, repository add assigns correct ID
-            Enquiry newEnquiry = new Enquiry(0, applicant.getNric(), project.getProjectName(), text);
-            _enqRepo.add(newEnquiry);  // Add assigns ID
+            // Create an enquiry with a temporary ID 0; the repository will assign the actual ID
+            int newEnquiryId = _enqRepo.getNextId(); // This method should return the next available ID
+            Enquiry newEnquiry = new Enquiry(newEnquiryId, applicant.getNric(), project.getProjectName(), text, ""); // Default empty reply
+
+            // Add the new enquiry to the repository (ID will be assigned here)
+            _enqRepo.add(newEnquiry);
+            
+            // Return the created enquiry
             return newEnquiry;
-        } catch (ValueError | IntegrityError e) {
+        } catch (DataSaveError | IntegrityError e) {
+            // Handle database save or integrity errors
             throw new OperationError("Failed to submit enquiry: " + e.getMessage());
+        } catch (Exception e) {
+            // Catch any other unexpected exceptions
+            throw new OperationError("An unexpected error occurred while submitting the enquiry: " + e.getMessage());
         }
     }
+
 
     @Override
     public void editEnquiry(Applicant applicant, Enquiry enquiry, String newText) throws OperationError {
+        // Check if the applicant is the owner of the enquiry
         if (!enquiry.getApplicantNric().equals(applicant.getNric())) {
             throw new OperationError("You can only edit your own enquiries.");
         }
+
+        // Ensure the enquiry has not been replied to
+        if (enquiry.getReply() != null && !enquiry.getReply().isEmpty()) {
+            throw new OperationError("You cannot edit an enquiry that has already been replied to.");
+        }
+
         try {
-            enquiry.setText(newText); // Model validates state (not replied) and text
+            // Update the enquiry text, with the model validating any business logic (like reply validation)
+            enquiry.setText(newText);
+
+            // Update the enquiry in the repository
             _enqRepo.update(enquiry);
-        } catch (OperationError | ValueError | IntegrityError e) {
+        } catch (IntegrityError | DataSaveError | DataLoadError e) {
+            // Catch errors related to integrity issues, data save or load problems
             throw new OperationError("Failed to update enquiry: " + e.getMessage());
+        } catch (Exception e) {
+            // Handle unexpected errors
+            throw new OperationError("An unexpected error occurred while updating the enquiry: " + e.getMessage());
         }
     }
+
 
     @Override
     public void deleteEnquiry(Applicant applicant, Enquiry enquiry) throws OperationError {
@@ -123,10 +158,12 @@ public class EnquiryService implements IEnquiryService {
             throw new OperationError("This enquiry has already been replied to.");
         }
 
-        Project project = _projectService.findProjectByName(enquiry.getProjectName());
-        if (project == null) {
+        Optional<Project> optionalProject = _projectService.findProjectByName(enquiry.getProjectName());
+        if (!optionalProject.isPresent()) {
             throw new OperationError("Project '" + enquiry.getProjectName() + "' not found.");
         }
+        Project project = optionalProject.get();
+
 
         UserRole userRole = replierUser.getRole();
         boolean canReply = false;
@@ -151,9 +188,17 @@ public class EnquiryService implements IEnquiryService {
         try {
             enquiry.setReply(formattedReply);
             _enqRepo.update(enquiry);
-        } catch (ValueError | IntegrityError e) {
-            throw new OperationError("Failed to save reply: " + e.getMessage());
+         } catch (IntegrityError e) {
+            // Handle IntegrityError specifically
+            throw new OperationError("Failed to save reply due to integrity issue: " + e.getMessage());
+        } catch (OperationError e) {
+            // Catch the OperationError, which is more general
+            throw new OperationError("Operation failed while saving reply: " + e.getMessage());
+        } catch (Exception e) {
+            // Catch any other unexpected exceptions
+            throw new OperationError("Unexpected error occurred while saving reply: " + e.getMessage());
         }
+
     }
 }
 

@@ -3,12 +3,14 @@ package service;
 
 import common.ApplicationStatus;
 import common.FlatType;
+import common.Tuple;
 import common.UserRole;
 import exception.OperationError;
 import exception.IntegrityError;
 import model.Application;
 import model.Applicant;
 import model.HDBManager;
+import model.HDBOfficer;
 import model.Project;
 import interfaces.IApplicationRepository;
 import service.interfaces.IApplicationService;
@@ -182,4 +184,166 @@ public class ApplicationService implements IApplicationService {
     }
 
     // Implement manager actions for approving/rejecting applications...
+    public void managerApproveApplication(HDBManager manager, Application application) throws OperationError {
+        if (!managerCanManageApp(manager, application)) {
+            throw new OperationError("You do not manage this project.");
+        }
+        if (application.getStatus() != ApplicationStatus.PENDING) {
+            throw new OperationError("Application status is not PENDING.");
+        }
+        if (application.isRequestWithdrawal()) {
+            throw new OperationError("Cannot approve application with pending withdrawal request.");
+        }
+
+        Project project = projectService.findProjectByName(application.getProjectName());
+        if (project == null) {
+            throw new IntegrityError("Project not found.");
+        }
+
+        int units = project.getFlatDetails(application.getFlatType())[0];
+        if (units <= 0) {
+            application.setStatus(ApplicationStatus.UNSUCCESSFUL); // Auto-reject
+            appRepo.update(application);
+            throw new OperationError("No units available. Application rejected.");
+        }
+
+        try {
+            application.setStatus(ApplicationStatus.SUCCESSFUL);
+            appRepo.update(application);
+        } catch (IntegrityError e) {
+            throw new OperationError("Failed to save application approval: " + e.getMessage());
+        }
+    }
+
+    // Manager Reject Application
+    public void managerRejectApplication(HDBManager manager, Application application) throws OperationError {
+        if (!managerCanManageApp(manager, application)) {
+            throw new OperationError("You do not manage this project.");
+        }
+        if (application.getStatus() != ApplicationStatus.PENDING) {
+            throw new OperationError("Application status is not PENDING.");
+        }
+
+        try {
+            application.setStatus(ApplicationStatus.UNSUCCESSFUL);
+            appRepo.update(application);
+        } catch (IntegrityError e) {
+            throw new OperationError("Failed to save application rejection: " + e.getMessage());
+        }
+    }
+
+    // Manager Approve Withdrawal
+    public void managerApproveWithdrawal(HDBManager manager, Application application) throws OperationError {
+        if (!managerCanManageApp(manager, application)) {
+            throw new OperationError("You do not manage this project.");
+        }
+        if (!application.isRequestWithdrawal()) {
+            throw new OperationError("No withdrawal request is pending.");
+        }
+
+        try {
+            application.setStatus(ApplicationStatus.UNSUCCESSFUL);
+            application.setWithdrawalRequest(false);
+
+            if (application.getStatus() == ApplicationStatus.BOOKED) {
+                Project project = projectService.findProjectByName(application.getProjectName());
+                if (project != null) {
+                    boolean success = project.increaseUnitCount(application.getFlatType());
+                    if (success) {
+                        projectService.updateProject(project);
+                    } else {
+                        throw new OperationError("Could not increase unit count for " + application.getFlatType() + " in project " + project.getProjectName());
+                    }
+                }
+            }
+
+            appRepo.update(application);
+        } catch (OperationError | IntegrityError e) {
+            throw new OperationError("Failed to process withdrawal approval: " + e.getMessage());
+        }
+    }
+
+    // Manager Reject Withdrawal
+    public void managerRejectWithdrawal(HDBManager manager, Application application) throws OperationError {
+        if (!managerCanManageApp(manager, application)) {
+            throw new OperationError("You do not manage this project.");
+        }
+        if (!application.isRequestWithdrawal()) {
+            throw new OperationError("No withdrawal request is pending.");
+        }
+
+        try {
+            application.setRequestWithdrawal(false);
+            appRepo.update(application);
+        } catch (IntegrityError e) {
+            throw new OperationError("Failed to save withdrawal rejection: " + e.getMessage());
+        }
+    }
+
+    // Officer Book Flat
+    public Tuple<Project, Applicant> officerBookFlat(HDBOfficer officer, Application application) throws OperationError {
+        Project project = this._project_service.findProjectByName(application.getProjectName());
+        if (!this._project_service.getHandledProjectNamesForOfficer(officer.nric).contains(project.getProjectName())) {
+            throw new OperationError("You do not handle this project.");
+        }
+
+        if (application.getStatus() != ApplicationStatus.SUCCESSFUL) {
+            throw new OperationError("Application status must be SUCCESSFUL to book.");
+        }
+
+        Applicant applicant = this._user_repo.findUserByNric(application.getApplicantNric());
+        if (applicant == null) {
+            throw new IntegrityError("Applicant not found.");
+        }
+
+        // --- Manual Transaction ---
+        boolean unitDecreased = false;
+        try {
+            // 1. Decrease unit count in Project model
+            if (!project.decreaseUnitCount(application.getFlatType())) {
+                application.setStatus(ApplicationStatus.UNSUCCESSFUL);
+                this._app_repo.update(application); // Update app status immediately
+                throw new OperationError("Booking failed: No units available.");
+            }
+            unitDecreased = true;
+
+            // 2. Update Project in repository (this is the core of the update operation)
+            this._project_service.updateProject(project); // Updating the project in the repo
+
+            // 3. Update Application status in model and repository
+            application.setStatus(ApplicationStatus.BOOKED);
+            this._app_repo.update(application);
+
+            // If all steps successful, return data (saving deferred)
+            return new Tuple<>(project, applicant);
+
+        } catch (OperationError | IntegrityError e) {
+            // --- Rollback attempts (Best Effort) ---
+            System.out.println("ERROR during booking: " + e.getMessage() + ". Attempting rollback...");
+
+            // Revert application status in memory & repo
+            application.setStatus(ApplicationStatus.SUCCESSFUL);
+            try {
+                this._app_repo.update(application);
+            } catch (Exception rb_e) {
+                System.out.println("CRITICAL: Failed rollback app status: " + rb_e.getMessage());
+            }
+
+            // Revert project unit count in memory & repo if decreased
+            if (unitDecreased) {
+                project.increaseUnitCount(application.getFlatType());
+                try {
+                    this._project_service.updateProject(project);
+                } catch (Exception rb_e) {
+                    System.out.println("CRITICAL: Failed rollback project units: " + rb_e.getMessage());
+                }
+            }
+
+            throw new OperationError("Booking failed: " + e.getMessage() + ". Rollback attempted."); // Re-raise original error
+        }
+    }
+
+
+    // Helper method to check if manager can manage the application
 }
+

@@ -9,12 +9,12 @@ import model.Project;
 import model.HDBManager;
 import model.Applicant;
 import model.Application;
-import repository.interfaces.IProjectRepository;
-import repository.interfaces.IRegistrationRepository;
-import repository.interfaces.IApplicationRepository;
+import interfaces.IProjectRepository;
+import interfaces.IRegistrationRepository;
+import interfaces.IApplicationRepository;
 import service.interfaces.IProjectService;
-import utils.InputUtil;
-import utils.DateUtil;
+import util.InputUtil;
+import util.DateUtil;
 
 import java.util.*;
 
@@ -31,7 +31,7 @@ public class ProjectService implements IProjectService {
 
     @Override
     public Optional<Project> findProjectByName(String name) {
-        return Optional.ofNullable(_projectRepo.findByName(name));
+        return _projectRepo.findByName(name);
     }
 
     @Override
@@ -80,7 +80,7 @@ public class ProjectService implements IProjectService {
             }
             if (!project.isCurrentlyVisibleAndActive()) continue;
 
-            int units2 = project.getFlatDetails(FlatType.TWO_ROOM).getLeft();
+            int units2 = project.getFlatDetails(FlatType.TWO_ROOM)[];
             int units3 = project.getFlatDetails(FlatType.THREE_ROOM).getLeft();
             boolean eligible = false;
 

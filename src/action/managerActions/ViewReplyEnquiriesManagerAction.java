@@ -21,6 +21,7 @@ import view.BaseView;
 import util.InputUtil;
 import common.UserRole;
 import common.RegistrationStatus;
+import common.Tuple;
 import common.ApplicationStatus;
 import exception.OperationError;
 import exception.IntegrityError;
@@ -30,18 +31,34 @@ import model.Registration;
 import model.Application;
 import model.Enquiry;
 import model.User;
+import repository.UserRepositoryFacade;
 
 public class ViewReplyEnquiriesManagerAction implements IAction {
     @Override
     public String execute(Map<String, Object> services, Map<String, Object> views, User currentUser, Map<String, Object> controllerData) throws Exception {
+        // Retrieve necessary services and views from the provided maps
         EnquiryService enqService = (EnquiryService) services.get("enq");
         EnquiryView enqView = (EnquiryView) views.get("enq");
         BaseView baseView = (BaseView) views.get("base");
         ProjectService projectService = (ProjectService) services.get("project");
+        UserRepositoryFacade userRepo = (UserRepositoryFacade) services.get("userRepo");
 
-        List<Tuple<Enquiry, String>> relevantData = ManagerActionUtils.getEnquiriesForManager((HDBManager) currentUser, services);
+        // Make sure the required services and views are correctly retrieved
+        if (enqService == null || enqView == null || baseView == null || projectService == null || userRepo == null) {
+            throw new Exception("One or more required services are missing.");
+        }
+
+        // Call the method with the required arguments
+        List<Tuple<Enquiry, String>> relevantData = ManagerActionUtils.getEnquiriesForManager(
+            (HDBManager) currentUser, // Cast currentUser to HDBManager
+            enqService,               // Pass EnquiryService
+            projectService,           // Pass ProjectService
+            userRepo                  // Pass UserRepositoryFacade
+        );
+
+        // Check if there are any relevant data and handle accordingly
         if (relevantData.isEmpty()) {
-            baseView.displayMessage("No enquiries found for the projects you manage.");
+            baseView.displayMessage("No enquiries found for the projects you manage.", false, true, false);
             return null;
         }
 
@@ -50,7 +67,7 @@ public class ViewReplyEnquiriesManagerAction implements IAction {
                 .map(Tuple::getFirst)
                 .collect(Collectors.toList());
 
-        baseView.displayMessage("Enquiries for Projects You Manage:", true);
+        baseView.displayMessage("Enquiries for Projects You Manage:", true, false, false);
         for (Tuple<Enquiry, String> entry : relevantData) {
             Enquiry enquiry = entry.getFirst();
             String applicantName = entry.getSecond();
@@ -60,7 +77,7 @@ public class ViewReplyEnquiriesManagerAction implements IAction {
         }
 
         if (unreplied.isEmpty()) {
-            baseView.displayMessage("No unreplied enquiries requiring action.", true);
+            baseView.displayMessage("No unreplied enquiries requiring action.", true, false, false);
             return null;
         }
 
@@ -70,7 +87,7 @@ public class ViewReplyEnquiriesManagerAction implements IAction {
                 String replyText = enqView.promptReplyText();
                 if (replyText != null) {
                     enqService.replyToEnquiry((HDBManager) currentUser, enquiryToReply, replyText);
-                    baseView.displayMessage("Reply submitted for Enquiry ID " + enquiryToReply.getEnquiryId(), true);
+                    baseView.displayMessage("Reply submitted for Enquiry ID " + enquiryToReply.getEnquiryId(), true, false, false);
                 }
             }
         }

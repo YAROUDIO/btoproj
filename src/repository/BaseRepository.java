@@ -3,7 +3,10 @@ package repository;
 import java.util.*;
 import java.util.function.Function;
 
+import common.RegistrationStatus;
 import exception.IntegrityError;
+import model.Project;
+import model.Registration;
 import storage.IStorageAdapter;
 
 public abstract class BaseRepository<T, K> {
@@ -120,6 +123,31 @@ public abstract class BaseRepository<T, K> {
 	public void deleteByName(String name) {
 		// TODO Auto-generated method stub
 		
+	}
+
+	public Optional<Project> findByName(String name) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public List<Project> findByManagerNric(String managerNric) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public Optional<Registration> findByOfficerAndProject(String officerNric, String projectName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public List<Registration> findByOfficer(String officerNric) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	public List<Registration> findByProject(String projectName, RegistrationStatus statusFilter) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 }
 
